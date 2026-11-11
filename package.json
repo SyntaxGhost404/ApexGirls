@@ -1,14 +1,24 @@
 {
-  "name": "apex-girls-bot",
-  "version": "1.0.0",
-  "description": "Apex Girls Discord Bot",
+  "name": "sanctuary-core",
+  "version": "2.0.0",
+  "description": "Sanctuary Core — community, leveling and engagement bot for the Apex Girls: 3650-Pull Giveaway / Scarlet Girls - Elite Edition Discord server. Built directly on the Discord API (no wrapper libraries).",
+  "type": "module",
   "main": "src/index.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
+    "deploy-commands": "node --disable-warning=ExperimentalWarning scripts/deploy-commands.js",
+    "check-payloads": "node --disable-warning=ExperimentalWarning scripts/check-payloads.js",
+    "test": "node --disable-warning=ExperimentalWarning --test \"tests/*.test.js\""
   },
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "chalk": "4.1.2",
-    "node-cron": "^3.0.3"
+    "ws": "^8.22.2"
+  },
+  "optionalDependencies": {
+    "https-proxy-agent": "^7.0.6"
   }
 }

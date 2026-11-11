@@ -1,56 +1,41 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
-const logger = require('./utils/logger');
-const scheduler = require('./utils/scheduler');
+// Sanctuary Core — entry point.
+import { loadEnvFile, loadConfig } from './config.js';
+import { Logger, addRedaction } from './core/logger.js';
+import { Bot } from './bot.js';
+import { registerFeatures } from './features/index.js';
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
-});
+loadEnvFile();
+const { config, errors } = loadConfig();
+const log = new Logger({ level: config.log.level, format: config.log.format, scope: 'core' });
+addRedaction(config.token);
 
-client.commands = new Collection();
-
-// Load Commands
-const commandsPath = path.join(__dirname, 'commands');
-if (fs.existsSync(commandsPath)) {
-    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-    for (const file of commandFiles) {
-        const filePath = path.join(commandsPath, file);
-        const command = require(filePath);
-        if ('data' in command && 'execute' in command) {
-            client.commands.set(command.data.name, command);
-        } else {
-            logger.warn(`The command at ${filePath} is missing a required "data" or "execute" property.`);
-        }
-    }
+if (errors.length) {
+  for (const e of errors) log.error(e);
+  log.error('Copy .env.example to .env and fill in the required values.');
+  process.exit(1);
 }
+config.debugValidate = config.log.level === 'debug';
 
-// Load Events
-const eventsPath = path.join(__dirname, 'events');
-if (fs.existsSync(eventsPath)) {
-    const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+const bot = new Bot(config, log);
+registerFeatures(bot);
 
-    for (const file of eventFiles) {
-        const filePath = path.join(eventsPath, file);
-        const event = require(filePath);
-        logger.info(`Loaded event: ${event.name}`);
-        if (event.once) {
-            client.once(event.name, (...args) => event.execute(...args));
-        } else {
-            client.on(event.name, (...args) => event.execute(...args));
-        }
-    }
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info(`${signal} received — shutting down (session kept resumable for a quick restart)`);
+  try {
+    await bot.stop({ resumable: true });
+  } finally {
+    process.exit(0);
+  }
 }
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('unhandledRejection', (err) => log.error('unhandled rejection', err));
+process.on('uncaughtException', (err) => log.error('uncaught exception', err));
 
-scheduler.init(client);
-
-logger.info('Attempting to connect to Discord Gateway...');
-
-client.login(process.env.BOT_TOKEN).catch(err => {
-    logger.error('Login failed: ' + err.message);
+bot.start().catch((err) => {
+  log.error('startup failed', err);
+  process.exit(1);
 });
